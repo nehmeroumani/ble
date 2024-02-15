@@ -70,6 +70,7 @@ func NewHCI() *HCI {
 
 		//done: make(chan bool),
 	}
+	h.params.init()
 	return h
 }
 
