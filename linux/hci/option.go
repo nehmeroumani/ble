@@ -2,15 +2,27 @@ package hci
 
 import (
 	"errors"
+	"github.com/nehmeroumani/ble/linux/hci/evt"
+	"time"
 
 	"github.com/nehmeroumani/ble/linux/hci/cmd"
-	"github.com/nehmeroumani/ble/linux/hci/evt"
-	"github.com/nehmeroumani/ble/linux/smp"
 )
 
 // SetDeviceID sets HCI device ID.
 func (h *HCI) SetDeviceID(id int) error {
 	h.id = id
+	return nil
+}
+
+// SetDialerTimeout sets dialing timeout for Dialer.
+func (h *HCI) SetDialerTimeout(d time.Duration) error {
+	h.dialerTmo = d
+	return nil
+}
+
+// SetListenerTimeout sets dialing timeout for Listener.
+func (h *HCI) SetListenerTimeout(d time.Duration) error {
+	h.listenerTmo = d
 	return nil
 }
 
@@ -52,10 +64,4 @@ func (h *HCI) SetPeripheralRole() error {
 // SetCentralRole is not supported
 func (h *HCI) SetCentralRole() error {
 	return errors.New("Not supported")
-}
-
-// OptPairingIO allows input and output for the pairing process.
-func (h *HCI) SetPairingCapabilities(param smp.Capabilities) error {
-	h.smpCapabilites = param
-	return nil
 }

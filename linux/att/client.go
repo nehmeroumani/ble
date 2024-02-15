@@ -2,11 +2,11 @@ package att
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
-	"sync"
+	"time"
 
 	"github.com/nehmeroumani/ble"
+	"github.com/pkg/errors"
 )
 
 // NotificationHandler handles notification or indication.
@@ -16,8 +16,6 @@ type NotificationHandler interface {
 
 // Client implementa an Attribute Protocol Client.
 type Client struct {
-	sync.WaitGroup
-
 	l2c  ble.Conn
 	rspc chan []byte
 
@@ -41,26 +39,6 @@ func NewClient(l2c ble.Conn, h NotificationHandler) *Client {
 	return c
 }
 
-func (c *Client) Connection() ble.Conn {
-	return c.l2c
-}
-
-func (c *Client) take() (*[]byte, error) {
-	select {
-	case txBuf := <-c.chTxBuf:
-		return &txBuf, nil
-	case <-c.l2c.Disconnected():
-		return nil, errors.New("disconnected")
-	}
-}
-
-func (c *Client) release(txBuf *[]byte) {
-	select {
-	case c.chTxBuf <- *txBuf:
-	case <-c.l2c.Disconnected():
-	}
-}
-
 // ExchangeMTU informs the server of the client’s maximum receive MTU size and
 // request the server to respond with its maximum receive MTU size. [Vol 3, Part F, 3.4.2.1]
 func (c *Client) ExchangeMTU(clientRxMTU int) (serverRxMTU int, err error) {
@@ -71,16 +49,13 @@ func (c *Client) ExchangeMTU(clientRxMTU int) (serverRxMTU int, err error) {
 	// Acquire and reuse the txBuf, and release it after usage.
 	// The same txBuf, or a newly allocate one, if the txMTU is changed,
 	// will be released back to the channel.
-	txBuf, err := c.take()
-	if err != nil {
-		return 0, err
-	}
-	defer c.release(txBuf)
+	txBuf := <-c.chTxBuf
+	defer func() { c.chTxBuf <- txBuf }()
 
 	// Let L2CAP know the MTU we can handle.
 	c.l2c.SetRxMTU(clientRxMTU)
 
-	req := ExchangeMTURequest((*txBuf)[:3])
+	req := ExchangeMTURequest(txBuf[:3])
 	req.SetAttributeOpcode()
 	req.SetClientRxMTU(uint16(clientRxMTU))
 
@@ -103,12 +78,12 @@ func (c *Client) ExchangeMTU(clientRxMTU int) (serverRxMTU int, err error) {
 	}
 
 	txMTU := int(rsp.ServerRxMTU())
-	if len(*txBuf) != txMTU {
+	if len(txBuf) != txMTU {
 		// Let L2CAP know the MTU that the remote device can handle.
 		c.l2c.SetTxMTU(txMTU)
 		// Put a re-allocated txBuf back to the channel.
 		// The txBuf has been captured in deferred function.
-		*txBuf = make([]byte, txMTU, txMTU)
+		txBuf = make([]byte, txMTU, txMTU)
 	}
 
 	return txMTU, nil
@@ -123,13 +98,10 @@ func (c *Client) FindInformation(starth, endh uint16) (fmt int, data []byte, err
 	}
 
 	// Acquire and reuse the txBuf, and release it after usage.
-	txBuf, err := c.take()
-	if err != nil {
-		return 0, nil, err
-	}
-	defer c.release(txBuf)
+	txBuf := <-c.chTxBuf
+	defer func() { c.chTxBuf <- txBuf }()
 
-	req := FindInformationRequest((*txBuf)[:5])
+	req := FindInformationRequest(txBuf[:5])
 	req.SetAttributeOpcode()
 	req.SetStartingHandle(starth)
 	req.SetEndingHandle(endh)
@@ -180,13 +152,10 @@ func (c *Client) ReadByType(starth, endh uint16, uuid ble.UUID) (int, []byte, er
 	}
 
 	// Acquire and reuse the txBuf, and release it after usage.
-	txBuf, err := c.take()
-	if err != nil {
-		return 0, nil, err
-	}
-	defer c.release(txBuf)
+	txBuf := <-c.chTxBuf
+	defer func() { c.chTxBuf <- txBuf }()
 
-	req := ReadByTypeRequest((*txBuf)[:5+len(uuid)])
+	req := ReadByTypeRequest(txBuf[:5+len(uuid)])
 	req.SetAttributeOpcode()
 	req.SetStartingHandle(starth)
 	req.SetEndingHandle(endh)
@@ -217,13 +186,10 @@ func (c *Client) ReadByType(starth, endh uint16, uuid ble.UUID) (int, []byte, er
 func (c *Client) Read(handle uint16) ([]byte, error) {
 
 	// Acquire and reuse the txBuf, and release it after usage.
-	txBuf, err := c.take()
-	if err != nil {
-		return nil, err
-	}
-	defer c.release(txBuf)
+	txBuf := <-c.chTxBuf
+	defer func() { c.chTxBuf <- txBuf }()
 
-	req := ReadRequest((*txBuf)[:3])
+	req := ReadRequest(txBuf[:3])
 	req.SetAttributeOpcode()
 	req.SetAttributeHandle(handle)
 
@@ -253,13 +219,10 @@ func (c *Client) Read(handle uint16) ([]byte, error) {
 func (c *Client) ReadBlob(handle, offset uint16) ([]byte, error) {
 
 	// Acquire and reuse the txBuf, and release it after usage.
-	txBuf, err := c.take()
-	if err != nil {
-		return nil, err
-	}
-	defer c.release(txBuf)
+	txBuf := <-c.chTxBuf
+	defer func() { c.chTxBuf <- txBuf }()
 
-	req := ReadBlobRequest((*txBuf)[:5])
+	req := ReadBlobRequest(txBuf[:5])
 	req.SetAttributeOpcode()
 	req.SetAttributeHandle(handle)
 	req.SetValueOffset(offset)
@@ -297,13 +260,10 @@ func (c *Client) ReadMultiple(handles []uint16) ([]byte, error) {
 	}
 
 	// Acquire and reuse the txBuf, and release it after usage.
-	txBuf, err := c.take()
-	if err != nil {
-		return nil, err
-	}
-	defer c.release(txBuf)
+	txBuf := <-c.chTxBuf
+	defer func() { c.chTxBuf <- txBuf }()
 
-	req := ReadMultipleRequest((*txBuf)[:1+len(handles)*2])
+	req := ReadMultipleRequest(txBuf[:1+len(handles)*2])
 	req.SetAttributeOpcode()
 	p := req.SetOfHandles()
 	for _, h := range handles {
@@ -340,13 +300,10 @@ func (c *Client) ReadByGroupType(starth, endh uint16, uuid ble.UUID) (int, []byt
 	}
 
 	// Acquire and reuse the txBuf, and release it after usage.
-	txBuf, err := c.take()
-	if err != nil {
-		return 0, nil, fmt.Errorf("failed to aquire txBuf: %w", err)
-	}
-	defer c.release(txBuf)
+	txBuf := <-c.chTxBuf
+	defer func() { c.chTxBuf <- txBuf }()
 
-	req := ReadByGroupTypeRequest((*txBuf)[:5+len(uuid)])
+	req := ReadByGroupTypeRequest(txBuf[:5+len(uuid)])
 	req.SetAttributeOpcode()
 	req.SetStartingHandle(starth)
 	req.SetEndingHandle(endh)
@@ -354,7 +311,7 @@ func (c *Client) ReadByGroupType(starth, endh uint16, uuid ble.UUID) (int, []byt
 
 	b, err := c.sendReq(req)
 	if err != nil {
-		return 0, nil, fmt.Errorf("failed to send request: %w", err)
+		return 0, nil, err
 	}
 
 	// Convert and validate the response.
@@ -383,13 +340,10 @@ func (c *Client) Write(handle uint16, value []byte) error {
 	}
 
 	// Acquire and reuse the txBuf, and release it after usage.
-	txBuf, err := c.take()
-	if err != nil {
-		return err
-	}
-	defer c.release(txBuf)
+	txBuf := <-c.chTxBuf
+	defer func() { c.chTxBuf <- txBuf }()
 
-	req := WriteRequest((*txBuf)[:3+len(value)])
+	req := WriteRequest(txBuf[:3+len(value)])
 	req.SetAttributeOpcode()
 	req.SetAttributeHandle(handle)
 	req.SetAttributeValue(value)
@@ -420,13 +374,10 @@ func (c *Client) WriteCommand(handle uint16, value []byte) error {
 	}
 
 	// Acquire and reuse the txBuf, and release it after usage.
-	txBuf, err := c.take()
-	if err != nil {
-		return err
-	}
-	defer c.release(txBuf)
+	txBuf := <-c.chTxBuf
+	defer func() { c.chTxBuf <- txBuf }()
 
-	req := WriteCommand((*txBuf)[:3+len(value)])
+	req := WriteCommand(txBuf[:3+len(value)])
 	req.SetAttributeOpcode()
 	req.SetAttributeHandle(handle)
 	req.SetAttributeValue(value)
@@ -442,13 +393,10 @@ func (c *Client) SignedWrite(handle uint16, value []byte, signature [12]byte) er
 	}
 
 	// Acquire and reuse the txBuf, and release it after usage.
-	txBuf, err := c.take()
-	if err != nil {
-		return err
-	}
-	defer c.release(txBuf)
+	txBuf := <-c.chTxBuf
+	defer func() { c.chTxBuf <- txBuf }()
 
-	req := SignedWriteCommand((*txBuf)[:15+len(value)])
+	req := SignedWriteCommand(txBuf[:15+len(value)])
 	req.SetAttributeOpcode()
 	req.SetAttributeHandle(handle)
 	req.SetAttributeValue(value)
@@ -467,20 +415,17 @@ func (c *Client) PrepareWrite(handle uint16, offset uint16, value []byte) (uint1
 	}
 
 	// Acquire and reuse the txBuf, and release it after usage.
-	txBuf, err := c.take()
-	if err != nil {
-		return 0, 0, nil, err
-	}
-	defer c.release(txBuf)
+	txBuf := <-c.chTxBuf
+	defer func() { c.chTxBuf <- txBuf }()
 
-	req := PrepareWriteRequest((*txBuf)[:5+len(value)])
+	req := PrepareWriteRequest(txBuf[:5+len(value)])
 	req.SetAttributeOpcode()
 	req.SetAttributeHandle(handle)
 	req.SetValueOffset(offset)
 
 	b, err := c.sendReq(req)
 	if err != nil {
-		return 0, 0, nil, fmt.Errorf("client: req: could not send request: %w", err)
+		return 0, 0, nil, err
 	}
 
 	// Convert and validate the response.
@@ -504,19 +449,16 @@ func (c *Client) PrepareWrite(handle uint16, offset uint16, value []byte) (uint1
 func (c *Client) ExecuteWrite(flags uint8) error {
 
 	// Acquire and reuse the txBuf, and release it after usage.
-	txBuf, err := c.take()
-	if err != nil {
-		return err
-	}
-	defer c.release(txBuf)
+	txBuf := <-c.chTxBuf
+	defer func() { c.chTxBuf <- txBuf }()
 
-	req := ExecuteWriteRequest((*txBuf)[:1])
+	req := ExecuteWriteRequest(txBuf[:1])
 	req.SetAttributeOpcode()
 	req.SetFlags(flags)
 
 	b, err := c.sendReq(req)
 	if err != nil {
-		return fmt.Errorf("client: req: could not send request: %w", err)
+		return err
 	}
 
 	// Convert and validate the response.
@@ -524,7 +466,7 @@ func (c *Client) ExecuteWrite(flags uint8) error {
 	switch {
 	case rsp[0] == ErrorResponseCode && len(rsp) == 5:
 		return ble.ATTError(rsp[4])
-	case rsp[0] == ErrorResponseCode && len(rsp) == 5:
+	case rsp[0] == ErrorResponseCode && len(rsp) != 5:
 		fallthrough
 	case rsp[0] != rsp.AttributeOpcode():
 		return ErrInvalidResponse
@@ -538,9 +480,9 @@ func (c *Client) sendCmd(b []byte) error {
 }
 
 func (c *Client) sendReq(b []byte) (rsp []byte, err error) {
-	//logger.Debug("client: req: % X", b)
+	logger.Debug("client", "req", fmt.Sprintf("% X", b))
 	if _, err := c.l2c.Write(b); err != nil {
-		return nil, fmt.Errorf("send ATT request failed: %w", err)
+		return nil, errors.Wrap(err, "send ATT request failed")
 	}
 	for {
 		select {
@@ -550,27 +492,24 @@ func (c *Client) sendReq(b []byte) (rsp []byte, err error) {
 			}
 			// Sometimes when we connect to an Apple device, it sends
 			// ATT requests asynchronously to us. // In this case, we
-			// return an ErrReqNotSupp response, and continue to wait
+			// returns an ErrReqNotSupp response, and continue to wait
 			// the response to our request.
 			errRsp := newErrorResponse(rsp[0], 0x0000, ble.ErrReqNotSupp)
-			//logger.Debug("client: req: % X", b)
+			logger.Debug("client", "req", fmt.Sprintf("% X", b))
 			_, err := c.l2c.Write(errRsp)
 			if err != nil {
-				return nil, fmt.Errorf("unexpected ATT response received: %w", err)
+				return nil, errors.Wrap(err, "unexpected ATT response received")
 			}
 		case err := <-c.chErr:
-			if err != nil {
-				return nil, fmt.Errorf("ATT request failed: %w", err)
-			}
-		case <-c.l2c.Disconnected():
-			return nil, errors.New("l2c disconnected")
+			return nil, errors.Wrap(err, "ATT request failed")
+		case <-time.After(30 * time.Second):
+			return nil, errors.Wrap(ErrSeqProtoTimeout, "ATT request timeout")
 		}
 	}
 }
 
 // Loop ...
 func (c *Client) Loop() {
-	defer c.Wait()
 
 	type asyncWork struct {
 		handle func([]byte)
@@ -579,10 +518,7 @@ func (c *Client) Loop() {
 
 	ch := make(chan asyncWork, 16)
 	defer close(ch)
-
-	c.Add(1)
 	go func() {
-		defer c.Done()
 		for w := range ch {
 			w.handle(w.data)
 		}
@@ -591,41 +527,105 @@ func (c *Client) Loop() {
 	confirmation := []byte{HandleValueConfirmationCode}
 	for {
 		n, err := c.l2c.Read(c.rxBuf)
-		//logger.Debug("client: rsp: % X", c.rxBuf[:n])
+		logger.Debug("client", "rsp", fmt.Sprintf("% X", c.rxBuf[:n]))
 		if err != nil {
 			// We don't expect any error from the bearer (L2CAP ACL-U)
 			// Pass it along to the pending request, if any, and escape.
-			select {
-			case c.chErr <- err:
-			case <-c.l2c.Disconnected():
-			}
+			c.chErr <- err
 			return
 		}
 
 		b := make([]byte, n)
 		copy(b, c.rxBuf)
-		if (b[0] != HandleValueNotificationCode) && (b[0] != HandleValueIndicationCode) {
+
+		// TODO: better request identification
+		if b[0] == ExchangeMTURequestCode {
+			// Schedule this to be taken care of
 			select {
-			case c.rspc <- b:
-			case <-c.l2c.Disconnected():
-				return
+			case ch <- asyncWork{handle: c.handleRequest, data: b}:
+			default:
+				// If this really happens, especially on a slow machine, enlarge the channel buffer.
+				_ = logger.Error("client", "req", "can't enqueue incoming request.")
 			}
+			continue
+		}
+
+		if (b[0] != HandleValueNotificationCode) && (b[0] != HandleValueIndicationCode) {
+			c.rspc <- b
 			continue
 		}
 
 		// Deliver the full request to upper layer.
 		select {
 		case ch <- asyncWork{handle: c.handler.HandleNotification, data: b}:
-		case <-c.l2c.Disconnected():
+		default:
 			// If this really happens, especially on a slow machine, enlarge the channel buffer.
-			//logger.Error("client: req: can't enqueue incoming notification.")
-			return
+			_ = logger.Error("client", "req", "can't enqueue incoming notification.")
 		}
 
 		// Always write aknowledgement for an indication, even it was an invalid request.
 		if b[0] == HandleValueIndicationCode {
-			//logger.Debug("client: req: % X", b)
+			logger.Debug("client", "req", fmt.Sprintf("% X", b))
 			_, _ = c.l2c.Write(confirmation)
 		}
 	}
+}
+
+func (c *Client) handleRequest(b []byte) {
+	switch b[0] {
+	case ExchangeMTURequestCode:
+		resp := c.handleExchangeMTURequest(b)
+		if len(resp) != 0 {
+			err := c.sendCmd(resp)
+			if err != nil {
+				_ = logger.Error("client", "req", fmt.Sprintf("error sending MTU response: %s", err.Error()))
+			}
+		}
+	default:
+		errRsp := newErrorResponse(b[0], 0x0000, ble.ErrReqNotSupp)
+		_ = c.sendCmd(errRsp)
+		_ = logger.Warn("client", "req", fmt.Sprintf("Received unhandled request [0x%X]", b))
+	}
+}
+
+// handle MTU Exchange request. [Vol 3, Part F, 3.4.2]
+// ExchangeMTU informs the server of the client’s maximum receive MTU size and
+// request the server to respond with its maximum receive MTU size. [Vol 3, Part F, 3.4.2.1]
+func (c *Client) handleExchangeMTURequest(r ExchangeMTURequest) []byte {
+	// Acquire and reuse the txBuf, and release it after usage.
+	// The same txBuf, or a newly allocate one, if the txMTU is changed,
+	// will be released back to the channel.
+
+	// We do this first to prevent races with ExchangeMTURequest
+	txBuf := <-c.chTxBuf
+
+	// Validate the request.
+	switch {
+	case len(r) != 3:
+		fallthrough
+	case r.ClientRxMTU() < 23:
+		return newErrorResponse(r.AttributeOpcode(), 0x0000, ble.ErrInvalidPDU)
+	}
+
+	txMTU := int(r.ClientRxMTU())
+	// Our rxMTU for the response
+	rxMTU := c.l2c.RxMTU()
+
+	// Update transmit MTU to max supported by the other side
+	logger.Debug("client", "req", fmt.Sprintf("server requested an MTU change to TX:%d RX:%d", txMTU, rxMTU))
+	c.l2c.SetTxMTU(txMTU)
+
+	defer func() {
+		// Update the tx buffer if needed
+		if len(txBuf) != txMTU {
+			c.chTxBuf <- make([]byte, txMTU, txMTU)
+		} else {
+			c.chTxBuf <- txBuf
+		}
+	}()
+
+	rsp := ExchangeMTUResponse(txBuf)
+	rsp.SetAttributeOpcode()
+	rsp.SetServerRxMTU(uint16(rxMTU))
+	return rsp[:3]
 }

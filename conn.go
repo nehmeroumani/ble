@@ -7,10 +7,13 @@ import (
 
 // Conn implements a L2CAP connection.
 type Conn interface {
-	io.ReadWriter
+	io.ReadWriteCloser
 
-	// close takes a context for sending the disconnect command to the peripheral
-	Close(ctx context.Context) error
+	// Context returns the context that is used by this Conn.
+	Context() context.Context
+
+	// SetContext sets the context that is used by this Conn.
+	SetContext(ctx context.Context)
 
 	// LocalAddr returns local device's address.
 	LocalAddr() Addr
@@ -29,6 +32,9 @@ type Conn interface {
 
 	// SetTxMTU sets the ATT_MTU which the remote device is capable of accepting.
 	SetTxMTU(mtu int)
+
+	// ReadRSSI retrieves the current RSSI value of remote peripheral. [Vol 2, Part E, 7.5.4]
+	ReadRSSI() int
 
 	// Disconnected returns a receiving channel, which is closed when the connection disconnects.
 	Disconnected() <-chan struct{}

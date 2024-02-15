@@ -2,12 +2,9 @@ package att
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
-	"sync"
 	"time"
 
 	"github.com/nehmeroumani/ble"
@@ -23,8 +20,6 @@ type conn struct {
 
 // Server implements an ATT (Attribute Protocol) server.
 type Server struct {
-	sync.WaitGroup
-
 	conn *conn
 	db   *DB
 
@@ -47,7 +42,7 @@ type Server struct {
 func NewServer(db *DB, l2c ble.Conn) (*Server, error) {
 	mtu := l2c.RxMTU()
 	if mtu < ble.DefaultMTU || mtu > ble.MaxMTU {
-		return nil, errors.New("invalid MTU")
+		return nil, fmt.Errorf("invalid MTU")
 	}
 	// Although the rxBuf is initialized with the capacity of rxMTU, it is
 	// not discovered, and only the default ATT_MTU (23 bytes) of it shall
@@ -110,7 +105,7 @@ func (s *Server) indicate(h uint16, data []byte) (int, error) {
 	buf.Write(data)
 	n, err := s.conn.Write(rsp[:3+buf.Len()])
 	if err != nil {
-		return n, fmt.Errorf("could not write to conn: %w", err)
+		return n, err
 	}
 	select {
 	case _, ok := <-s.chConfirm:
@@ -125,8 +120,6 @@ func (s *Server) indicate(h uint16, data []byte) (int, error) {
 
 // Loop accepts incoming ATT request, and respond response.
 func (s *Server) Loop() {
-	defer s.Wait()
-
 	type sbuf struct {
 		buf []byte
 		len int
@@ -136,23 +129,21 @@ func (s *Server) Loop() {
 	pool <- &sbuf{buf: make([]byte, s.rxMTU)}
 
 	seq := make(chan *sbuf)
-	s.Add(1)
 	go func() {
-		defer s.Done()
 		b := <-pool
 		for {
 			n, err := s.conn.Read(b.buf)
 			if n == 0 || err != nil {
 				close(seq)
 				close(s.chConfirm)
-				_ = s.conn.Close(context.Background())
+				_ = s.conn.Close()
 				return
 			}
 			if b.buf[0] == HandleValueConfirmationCode {
 				select {
 				case s.chConfirm <- true:
 				default:
-					// received a spurious confirmation
+					logger.Error("server", "received a spurious confirmation", nil)
 				}
 				continue
 			}
@@ -170,6 +161,9 @@ func (s *Server) Loop() {
 		pool <- req
 	}
 	for h, ccc := range s.conn.cccs {
+		if ccc != 0 {
+			logger.Info("cleanup", ble.ContextKeyCCC, fmt.Sprintf("0x%02X", ccc))
+		}
 		if ccc&cccIndicate != 0 {
 			s.conn.in[h].Close()
 		}
@@ -181,7 +175,7 @@ func (s *Server) Loop() {
 
 func (s *Server) handleRequest(b []byte) []byte {
 	var resp []byte
-	//logger.Debug("server: req: % X", b)
+	logger.Debug("server", "req", fmt.Sprintf("% X", b))
 	switch reqType := b[0]; reqType {
 	case ExchangeMTURequestCode:
 		resp = s.handleExchangeMTURequest(b)
@@ -211,7 +205,7 @@ func (s *Server) handleRequest(b []byte) []byte {
 	default:
 		resp = newErrorResponse(reqType, 0x0000, ble.ErrReqNotSupp)
 	}
-	//logger.Debug("server: rsp: % X", resp)
+	logger.Debug("server", "rsp", fmt.Sprintf("% X", resp))
 	return resp
 }
 
@@ -539,7 +533,7 @@ func (s *Server) handleWriteRequest(r WriteRequest) []byte {
 }
 
 func (s *Server) handlePrepareWriteRequest(r PrepareWriteRequest) []byte {
-	//logger.Debug("handlePrepareWriteRequest -> r.AttributeHandle: %s", r.AttributeHandle())
+	logger.Debug("handlePrepareWriteRequest ->", "r.AttributeHandle", r.AttributeHandle())
 	// Validate the request.
 	switch {
 	case len(r) < 3:
@@ -644,7 +638,9 @@ func handleATT(a *attr, s *Server, req []byte, rsp ble.ResponseWriter) ble.ATTEr
 			return ble.ErrWriteNotPerm
 		}
 		data = PrepareWriteRequest(req).PartAttributeValue()
-		//logger.Debug("handleATT: PartAttributeValue: data: %x, offset: %d, %p", data, int(PrepareWriteRequest(req).ValueOffset()), s.prepareWriteRequestAttr)
+		logger.Debug("handleATT", "PartAttributeValue",
+			fmt.Sprintf("data: %x, offset: %d, %p\n", data, int(PrepareWriteRequest(req).ValueOffset()), s.prepareWriteRequestAttr))
+
 		if s.prepareWriteRequestAttr == nil {
 			s.prepareWriteRequestAttr = a
 			s.prepareWriteRequestData.Reset()

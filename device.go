@@ -1,9 +1,6 @@
 package ble
 
-import (
-	"context"
-	"time"
-)
+import "context"
 
 // Device ...
 type Device interface {
@@ -17,8 +14,8 @@ type Device interface {
 	// It removes all currently added services, if any.
 	SetServices(svcs []*Service) error
 
-	// Closed the underlying hci socket and waits for all connections to close and goroutines to finish
-	Close() error
+	// Stop detatch the GATT server from a peripheral device.
+	Stop() error
 
 	// Advertise advertises a given Advertisement
 	Advertise(ctx context.Context, adv Advertisement) error
@@ -43,21 +40,6 @@ type Device interface {
 	// Scan starts scanning. Duplicated advertisements will be filtered out if allowDup is set to false.
 	Scan(ctx context.Context, allowDup bool, h AdvHandler) error
 
-	// Inquire starts a BR/EDR scan
-	Inquire(ctx context.Context, interval time.Duration, numResponses int, h InqHandler) error
-
-	// RequestRemoteName queries the remote BR/EDR device for its name
-	RequestRemoteName(ctx context.Context, a Addr) (string, error)
-
 	// Dial ...
-	DialBLE(context.Context, Addr, AddressType) (ClientBLE, error)
-
-	// Dial
-	DialRFCOMM(ctx context.Context, a Addr, clockOffset uint16, pageScanRepetitionMode, channel uint8) (ClientRFCOMM, error)
-
-	// Initializes the underlying hardware
-	Initialize(context.Context) error
-
-	// Closed returns a channel that is closed when the underlying socket closes
-	Closed() <-chan struct{}
+	Dial(ctx context.Context, a Addr) (Client, error)
 }

@@ -2,9 +2,11 @@ package ble
 
 import (
 	"context"
-	"fmt"
-	"errors"
-	"time"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/pkg/errors"
 )
 
 // ErrDefaultDevice ...
@@ -42,12 +44,12 @@ func SetServices(svcs []*Service) error {
 	return defaultDevice.SetServices(svcs)
 }
 
-// Close stop the GATT server
-func Close() error {
+// Stop detatch the GATT server from a peripheral device.
+func Stop() error {
 	if defaultDevice == nil {
 		return ErrDefaultDevice
 	}
-	return defaultDevice.Close()
+	return defaultDevice.Stop()
 }
 
 // AdvertiseNameAndServices advertises device name, and specified service UUIDs.
@@ -57,6 +59,7 @@ func AdvertiseNameAndServices(ctx context.Context, name string, uuids ...UUID) e
 	if defaultDevice == nil {
 		return ErrDefaultDevice
 	}
+	defer untrap(trap(ctx))
 	return defaultDevice.AdvertiseNameAndServices(ctx, name, uuids...)
 }
 
@@ -65,6 +68,7 @@ func AdvertiseIBeaconData(ctx context.Context, b []byte) error {
 	if defaultDevice == nil {
 		return ErrDefaultDevice
 	}
+	defer untrap(trap(ctx))
 	return defaultDevice.AdvertiseIBeaconData(ctx, b)
 }
 
@@ -73,6 +77,7 @@ func AdvertiseIBeacon(ctx context.Context, u UUID, major, minor uint16, pwr int8
 	if defaultDevice == nil {
 		return ErrDefaultDevice
 	}
+	defer untrap(trap(ctx))
 	return defaultDevice.AdvertiseIBeacon(ctx, u, major, minor, pwr)
 }
 
@@ -81,6 +86,7 @@ func Scan(ctx context.Context, allowDup bool, h AdvHandler, f AdvFilter) error {
 	if defaultDevice == nil {
 		return ErrDefaultDevice
 	}
+	defer untrap(trap(ctx))
 
 	if f == nil {
 		return defaultDevice.Scan(ctx, allowDup, h)
@@ -94,13 +100,6 @@ func Scan(ctx context.Context, allowDup bool, h AdvHandler, f AdvFilter) error {
 	return defaultDevice.Scan(ctx, allowDup, h2)
 }
 
-func Inquire(ctx context.Context, interval time.Duration, numResponses int, h InqHandler) error {
-	if defaultDevice == nil {
-		return ErrDefaultDevice
-	}
-	return defaultDevice.Inquire(ctx, interval, numResponses, h)
-}
-
 // Find ...
 func Find(ctx context.Context, allowDup bool, f AdvFilter) ([]Advertisement, error) {
 	if defaultDevice == nil {
@@ -110,54 +109,79 @@ func Find(ctx context.Context, allowDup bool, f AdvFilter) ([]Advertisement, err
 	h := func(a Advertisement) {
 		advs = append(advs, a)
 	}
+	defer untrap(trap(ctx))
 	return advs, Scan(ctx, allowDup, h, f)
 }
 
 // Dial ...
-func DialBLE(ctx context.Context, address Addr, addressType AddressType) (Client, error) {
+func Dial(ctx context.Context, a Addr) (Client, error) {
 	if defaultDevice == nil {
 		return nil, ErrDefaultDevice
 	}
-	return defaultDevice.DialBLE(ctx, address, addressType)
-}
-
-// DialRFCOMM ...
-func DialRFCOMM(ctx context.Context, a Addr, clockOffset uint16, pageScanRepetitionMode, channel uint8) (ClientRFCOMM, error) {
-	if defaultDevice == nil {
-		return nil, ErrDefaultDevice
-	}
-	return defaultDevice.DialRFCOMM(ctx, a, clockOffset, pageScanRepetitionMode, channel)
+	defer untrap(trap(ctx))
+	return defaultDevice.Dial(ctx, a)
 }
 
 // Connect searches for and connects to a Peripheral which matches specified condition.
 func Connect(ctx context.Context, f AdvFilter) (Client, error) {
 	ctx2, cancel := context.WithCancel(ctx)
-	defer cancel()
+	go func() {
+		select {
+		case <-ctx.Done():
+			cancel()
+		case <-ctx2.Done():
+		}
+	}()
 
 	ch := make(chan Advertisement)
 	fn := func(a Advertisement) {
-		select {
-		case ch <- a:
-			cancel()
-		case <-ctx.Done():
-			return
-		}
+		cancel()
+		ch <- a
 	}
 	if err := Scan(ctx2, false, fn, f); err != nil {
 		if err != context.Canceled {
-			return nil, fmt.Errorf("can't scan: %w", err)
+			return nil, errors.Wrap(err, "can't scan")
 		}
 	}
 
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case adv := <-ch:
-		cln, err := DialBLE(ctx, adv.Address(), adv.AddressType())
-		return cln, fmt.Errorf("can't dial: %w", err)
-	}
+	cln, err := Dial(ctx, (<-ch).Addr())
+	return cln, errors.Wrap(err, "can't dial")
 }
 
 // A NotificationHandler handles notification or indication from a server.
 type NotificationHandler func(req []byte)
 
+// WithSigHandler ...
+func WithSigHandler(ctx context.Context, cancel func()) context.Context {
+	return context.WithValue(ctx, ContextKeySig, cancel)
+}
+
+// Cleanup for the interrupted case.
+func trap(ctx context.Context) chan<- os.Signal {
+	v := ctx.Value(ContextKeySig)
+	if v == nil {
+		return nil
+	}
+	cancel, ok := v.(func())
+	if cancel == nil || !ok {
+		return nil
+	}
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		select {
+		case <-sigs:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return sigs
+}
+
+func untrap(sigs chan<- os.Signal) {
+	if sigs == nil {
+		return
+	}
+	signal.Stop(sigs)
+}

@@ -18,12 +18,11 @@ type Advertisement interface {
 	SolicitedService() []UUID
 
 	RSSI() int
-	Address() Addr
-	AddressType() AddressType
+	Addr() Addr
 }
 
 // ServiceData ...
 type ServiceData struct {
-	UUID UUID `json:"uuid"`
-	Data []byte `json:"data"`
+	UUID UUID
+	Data []byte
 }

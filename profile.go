@@ -1,7 +1,5 @@
 package ble
 
-import "github.com/nehmeroumani/ble/log"
-
 // NewService creates and initialize a new Service using u as it's UUID.
 func NewService(u UUID) *Service {
 	return &Service{UUID: u}
@@ -34,7 +32,7 @@ const (
 
 // A Profile is composed of one or more services necessary to fulfill a use case.
 type Profile struct {
-	Services []*Service `json:"services"`
+	Services []*Service
 }
 
 // Find searches discovered profile for the specified target's type and UUID.
@@ -90,11 +88,11 @@ func (p *Profile) FindDescriptor(desc *Descriptor) *Descriptor {
 
 // A Service is a BLE service.
 type Service struct {
-	UUID            UUID              `json:"uuid"`
-	Characteristics []*Characteristic `json:"characteristics"`
+	UUID            UUID
+	Characteristics []*Characteristic
 
-	Handle    uint16 `json:"handle"`
-	EndHandle uint16 `json:"endHandle"`
+	Handle    uint16
+	EndHandle uint16
 }
 
 // AddCharacteristic adds a characteristic to a service.
@@ -117,34 +115,32 @@ func (s *Service) NewCharacteristic(u UUID) *Characteristic {
 
 // A Characteristic is a BLE characteristic.
 type Characteristic struct {
-	UUID        UUID          `json:"uuid"`
-	Property    Property      `json:"property"`
-	Secure      Property      `json:"secure"`
-	Descriptors []*Descriptor `json:"descriptors"`
-	CCCD        *Descriptor   `json:"cccd"`
+	UUID        UUID
+	Property    Property
+	Secure      Property // FIXME
+	Descriptors []*Descriptor
+	CCCD        *Descriptor
 
-	Value []byte `json:"value"`
+	Value []byte
 
-	ReadHandler     ReadHandler   `json:"-"`
-	WriteHandler    WriteHandler  `json:"-"`
-	NotifyHandler   NotifyHandler `json:"-"`
-	IndicateHandler NotifyHandler `json:"-"`
+	ReadHandler     ReadHandler
+	WriteHandler    WriteHandler
+	NotifyHandler   NotifyHandler
+	IndicateHandler NotifyHandler
 
-	Handle      uint16 `json:"handle"`
-	ValueHandle uint16 `json:"valueHandle"`
-	EndHandle   uint16 `json:"endHandle"`
+	Handle      uint16
+	ValueHandle uint16
+	EndHandle   uint16
 }
 
 // AddDescriptor adds a descriptor to a characteristic.
 // AddDescriptor panics if the characteristic already contains another descriptor with the same UUID.
 func (c *Characteristic) AddDescriptor(d *Descriptor) *Descriptor {
 	for _, x := range c.Descriptors {
-		log.Printf("%s: Existing Descriptor: %s", c.UUID, d.UUID)
 		if x.UUID.Equal(d.UUID) {
-			panic("characteristic already contains a descriptor with UUID " + d.UUID.String())
+			panic("service already contains a characteristic with UUID " + d.UUID.String())
 		}
 	}
-	log.Printf("%s: Adding Descriptor: %s", c.UUID, d.UUID)
 	c.Descriptors = append(c.Descriptors, d)
 	return d
 }
@@ -202,14 +198,14 @@ func (c *Characteristic) HandleIndicate(h NotifyHandler) {
 
 // Descriptor is a BLE descriptor
 type Descriptor struct {
-	UUID     UUID     `json:"uuid"`
-	Property Property `json:"property"`
+	UUID     UUID
+	Property Property
 
-	Handle uint16 `json:"handle"`
-	Value  []byte `json:"value"`
+	Handle uint16
+	Value  []byte
 
-	ReadHandler  ReadHandler  `json:"-"`
-	WriteHandler WriteHandler `json:"-"`
+	ReadHandler  ReadHandler
+	WriteHandler WriteHandler
 }
 
 // SetValue makes the descriptor support read requests, and returns a static value.

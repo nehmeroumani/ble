@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package socket
@@ -8,15 +9,16 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 )
 
 func ioR(t, nr, size uintptr) uintptr {
-	return (2 << 30) | (t << 8) | nr | (size << 16)
+	return (directionRead << directionShift) | (t << typeShift) | nr | (size << sizeShift)
 }
 
 func ioW(t, nr, size uintptr) uintptr {
-	return (1 << 30) | (t << 8) | nr | (size << 16)
+	return (directionWrite << directionShift) | (t << typeShift) | nr | (size << sizeShift)
 }
 
 func ioctl(fd, op, arg uintptr) error {
@@ -58,12 +60,12 @@ type Socket struct {
 
 // NewSocket returns a HCI User Channel of specified device id.
 // If id is -1, the first available HCI device is returned.
-func NewSocket(id int) (Closer, error) {
+func NewSocket(id int) (*Socket, error) {
 	var err error
 	// Create RAW HCI Socket.
 	fd, err := unix.Socket(unix.AF_BLUETOOTH, unix.SOCK_RAW, unix.BTPROTO_HCI)
 	if err != nil {
-		return nil, fmt.Errorf("can't create socket: %w", err)
+		return nil, errors.Wrap(err, "can't create socket")
 	}
 
 	if id != -1 {
@@ -72,38 +74,40 @@ func NewSocket(id int) (Closer, error) {
 
 	req := devListRequest{devNum: hciMaxDevices}
 	if err = ioctl(uintptr(fd), hciGetDeviceList, uintptr(unsafe.Pointer(&req))); err != nil {
-		return nil, fmt.Errorf( "can't get device list: %w", err)
+		unix.Close(fd)
+		return nil, errors.Wrap(err, "can't get device list")
 	}
 	var msg string
 	for id := 0; id < int(req.devNum); id++ {
-		s, err := open(fd, id)
+		s, err := open(fd, int(req.devRequest[id].id))
 		if err == nil {
 			return s, nil
 		}
 		msg = msg + fmt.Sprintf("(hci%d: %s)", id, err)
 	}
-	return nil, fmt.Errorf("no devices available: %s", msg)
+	unix.Close(fd)
+	return nil, errors.Errorf("no devices available: %s", msg)
 }
 
 func open(fd, id int) (*Socket, error) {
 	// Reset the device in case previous session didn't cleanup properly.
 	if err := ioctl(uintptr(fd), hciDownDevice, uintptr(id)); err != nil {
-		return nil, fmt.Errorf("can't down device: %w", err)
+		return nil, errors.Wrap(err, "can't down device")
 	}
 	if err := ioctl(uintptr(fd), hciUpDevice, uintptr(id)); err != nil {
-		return nil,  fmt.Errorf("can't up device: %w", err)
+		return nil, errors.Wrap(err, "can't up device")
 	}
 
 	// HCI User Channel requires exclusive access to the device.
 	// The device has to be down at the time of binding.
 	if err := ioctl(uintptr(fd), hciDownDevice, uintptr(id)); err != nil {
-		return nil,  fmt.Errorf("can't down device: %w", err)
+		return nil, errors.Wrap(err, "can't down device")
 	}
 
 	// Bind the RAW socket to HCI User Channel
 	sa := unix.SockaddrHCI{Dev: uint16(id), Channel: unix.HCI_CHANNEL_USER}
 	if err := unix.Bind(fd, &sa); err != nil {
-		return nil,  fmt.Errorf("can't bind socket to hci user channel: %w", err)
+		return nil, errors.Wrap(err, "can't bind socket to hci user channel")
 	}
 
 	// poll for 20ms to see if any data becomes available, then clear it
@@ -118,12 +122,6 @@ func open(fd, id int) (*Socket, error) {
 }
 
 func (s *Socket) Read(p []byte) (int, error) {
-	select {
-	case <-s.closed:
-		return 0, io.EOF
-	default:
-	}
-
 	s.rmu.Lock()
 	n, err := unix.Read(s.fd, p)
 	s.rmu.Unlock()
@@ -134,44 +132,25 @@ func (s *Socket) Read(p []byte) (int, error) {
 	//
 	// note that if Write and Close are called concurrently it's
 	// indeterminate which replies get through.
-	if err != nil {
-		return n, fmt.Errorf("can't read hci socket: %w", err)
-	}
-	return n, nil
-}
-
-func (s *Socket) Write(p []byte) (int, error) {
 	select {
 	case <-s.closed:
 		return 0, io.EOF
 	default:
 	}
+	return n, errors.Wrap(err, "can't read hci socket")
+}
 
+func (s *Socket) Write(p []byte) (int, error) {
 	s.wmu.Lock()
 	defer s.wmu.Unlock()
-	//logger.Debug("<-%X\n", p)
 	n, err := unix.Write(s.fd, p)
-	if err != nil {
-		return n, fmt.Errorf("can't write hci socket: %w", err)
-	}
-	return n, nil
+	return n, errors.Wrap(err, "can't write hci socket")
 }
 
 func (s *Socket) Close() error {
-	select {
-	case <-s.closed:
-		return nil
-	default:
-	}
-
-	defer close(s.closed)
-	s.Write([]byte{0x01, 0x09, 0x10, 0x00})
-	if err := unix.Close(s.fd);err != nil {
-		return fmt.Errorf("can't close hci socket: %w", err)
-	}
-	return nil
-}
-
-func (s *Socket) Closed() chan struct{} {
-	return s.closed
+	close(s.closed)
+	s.Write([]byte{0x01, 0x09, 0x10, 0x00}) // no-op command to wake up the Read call if it's blocked
+	s.rmu.Lock()
+	defer s.rmu.Unlock()
+	return errors.Wrap(unix.Close(s.fd), "can't close hci socket")
 }
