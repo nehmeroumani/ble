@@ -12,17 +12,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-// NewDevice returns the default HCI device.
-func NewDevice(opts ...ble.Option) (*Device, error) {
-	return NewDeviceWithName("Gopher", opts...)
-}
-
-// NewDeviceWithName returns the default HCI device.
-func NewDeviceWithName(name string, opts ...ble.Option) (*Device, error) {
-	return NewDeviceWithNameAndHandler(name, nil, opts...)
-}
-
-func NewDeviceWithNameAndHandler(name string, handler ble.NotifyHandler, opts ...ble.Option) (*Device, error) {
+// NewDevice 
+func NewDevice(defaultServices []*ble.Service, opts ...ble.Option) (*Device, error) {
 	dev, err := hci.NewHCI(opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "can't create hci")
@@ -32,7 +23,7 @@ func NewDeviceWithNameAndHandler(name string, handler ble.NotifyHandler, opts ..
 		return nil, errors.Wrap(err, "can't init hci")
 	}
 
-	srv, err := gatt.NewServerWithNameAndHandler(name, handler)
+	srv, err := gatt.NewServer(defaultServices...)
 	if err != nil {
 		dev.Close()
 		return nil, errors.Wrap(err, "can't create server")
@@ -87,17 +78,6 @@ type Device struct {
 // AddService adds a service to database.
 func (d *Device) AddService(svc *ble.Service) error {
 	return d.Server.AddService(svc)
-}
-
-// RemoveAllServices removes all services that are currently in the database.
-func (d *Device) RemoveAllServices() error {
-	return d.Server.RemoveAllServices()
-}
-
-// SetServices set the specified service to the database.
-// It removes all currently added services, if any.
-func (d *Device) SetServices(svcs []*ble.Service) error {
-	return d.Server.SetServices(svcs)
 }
 
 // Stop stops gatt server.
