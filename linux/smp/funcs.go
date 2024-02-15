@@ -3,7 +3,7 @@ package smp
 import (
 	"crypto/aes"
 
-	"github.com/enceve/crypto/cmac"
+	"github.com/nehmeroumani/ble/linux/cmac"
 )
 
 var (
