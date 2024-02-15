@@ -1,10 +1,10 @@
 package linux
 
 import (
-	"github.com/thomascriley/ble"
-	"github.com/thomascriley/ble/linux/gatt"
-	"github.com/thomascriley/ble/linux/hci"
-	"github.com/thomascriley/ble/linux/rfcomm"
+	"github.com/nehmeroumani/ble"
+	"github.com/nehmeroumani/ble/linux/gatt"
+	"github.com/nehmeroumani/ble/linux/hci"
+	"github.com/nehmeroumani/ble/linux/rfcomm"
 )
 
 var testDevice ble.Device = &Device{}

@@ -1,6 +1,6 @@
 package ble
 
-import "github.com/thomascriley/ble/log"
+import "github.com/nehmeroumani/ble/log"
 
 // NewService creates and initialize a new Service using u as it's UUID.
 func NewService(u UUID) *Service {
@@ -90,7 +90,7 @@ func (p *Profile) FindDescriptor(desc *Descriptor) *Descriptor {
 
 // A Service is a BLE service.
 type Service struct {
-	UUID            UUID `json:"uuid"`
+	UUID            UUID              `json:"uuid"`
 	Characteristics []*Characteristic `json:"characteristics"`
 
 	Handle    uint16 `json:"handle"`
@@ -117,16 +117,16 @@ func (s *Service) NewCharacteristic(u UUID) *Characteristic {
 
 // A Characteristic is a BLE characteristic.
 type Characteristic struct {
-	UUID        UUID `json:"uuid"`
-	Property    Property `json:"property"`
-	Secure      Property `json:"secure"`
+	UUID        UUID          `json:"uuid"`
+	Property    Property      `json:"property"`
+	Secure      Property      `json:"secure"`
 	Descriptors []*Descriptor `json:"descriptors"`
-	CCCD        *Descriptor `json:"cccd"`
+	CCCD        *Descriptor   `json:"cccd"`
 
 	Value []byte `json:"value"`
 
-	ReadHandler     ReadHandler `json:"-"`
-	WriteHandler    WriteHandler `json:"-"`
+	ReadHandler     ReadHandler   `json:"-"`
+	WriteHandler    WriteHandler  `json:"-"`
 	NotifyHandler   NotifyHandler `json:"-"`
 	IndicateHandler NotifyHandler `json:"-"`
 
@@ -202,13 +202,13 @@ func (c *Characteristic) HandleIndicate(h NotifyHandler) {
 
 // Descriptor is a BLE descriptor
 type Descriptor struct {
-	UUID     UUID `json:"uuid"`
+	UUID     UUID     `json:"uuid"`
 	Property Property `json:"property"`
 
 	Handle uint16 `json:"handle"`
 	Value  []byte `json:"value"`
 
-	ReadHandler  ReadHandler `json:"-"`
+	ReadHandler  ReadHandler  `json:"-"`
 	WriteHandler WriteHandler `json:"-"`
 }
 

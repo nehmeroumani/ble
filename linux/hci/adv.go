@@ -2,9 +2,10 @@ package hci
 
 import (
 	"net"
-	"github.com/thomascriley/ble"
-	"github.com/thomascriley/ble/linux/adv"
-	"github.com/thomascriley/ble/linux/hci/evt"
+
+	"github.com/nehmeroumani/ble"
+	"github.com/nehmeroumani/ble/linux/adv"
+	"github.com/nehmeroumani/ble/linux/hci/evt"
 )
 
 // [Vol 6, Part B, 4.4.2] [Vol 3, Part C, 11]

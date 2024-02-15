@@ -6,15 +6,16 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/thomascriley/ble/log"
 	"io"
 	"net"
 	"sync"
 
-	"github.com/thomascriley/ble"
-	"github.com/thomascriley/ble/linux/hci/cmd"
-	"github.com/thomascriley/ble/linux/hci/evt"
-	"github.com/thomascriley/ble/linux/smp"
+	"github.com/nehmeroumani/ble/log"
+
+	"github.com/nehmeroumani/ble"
+	"github.com/nehmeroumani/ble/linux/hci/cmd"
+	"github.com/nehmeroumani/ble/linux/hci/evt"
+	"github.com/nehmeroumani/ble/linux/smp"
 )
 
 type ConnectionCompleteEvent interface {
@@ -224,7 +225,7 @@ func (c *Conn) Read(sdu []byte) (n int, err error) {
 // Write breaks down a L2CAP SDU into segmants [Vol 3, Part A, 7.3.1]
 func (c *Conn) Write(sdu []byte) (int, error) {
 	if len(sdu) > c.txMTU {
-		return 0, fmt.Errorf("payload exceeds mtu: %w",io.ErrShortWrite)
+		return 0, fmt.Errorf("payload exceeds mtu: %w", io.ErrShortWrite)
 	}
 
 	plen := len(sdu)
@@ -291,7 +292,7 @@ func (c *Conn) writePDU(pdu []byte) (int, error) {
 			return sent, errors.New("timed out")
 		}
 
-		flen := len(pdu)        // fragment length
+		flen := len(pdu) // fragment length
 		if flen > pkt.Cap()-1-4 {
 			flen = pkt.Cap() - 1 - 4
 		}
@@ -330,7 +331,7 @@ func (c *Conn) writePDU(pdu []byte) (int, error) {
 		sent += flen
 
 		flags = pbfContinuing << 4 // Set "continuing" in the boundary flags for the rest of fragments, if any.
-		pdu = pdu[flen:]             // Advance the point
+		pdu = pdu[flen:]           // Advance the point
 	}
 	return sent, nil
 }
@@ -339,7 +340,7 @@ func (c *Conn) writePDU(pdu []byte) (int, error) {
 func (c *Conn) recombine() error {
 	var (
 		pkt packet
-		ok bool
+		ok  bool
 	)
 	select {
 	case pkt, ok = <-c.chInPkt:
@@ -404,7 +405,7 @@ func (c *Conn) recombine() error {
 }
 
 func (c *Conn) receivePDU(p pdu) error {
-	select{
+	select {
 	case c.chInPDU <- p:
 		return nil
 	case <-c.hci.Closed():

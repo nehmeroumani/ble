@@ -5,9 +5,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sync"
-	"github.com/thomascriley/ble"
-	"github.com/thomascriley/ble/log"
-	"github.com/thomascriley/ble/linux/att"
+
+	"github.com/nehmeroumani/ble"
+	"github.com/nehmeroumani/ble/linux/att"
+	"github.com/nehmeroumani/ble/log"
 )
 
 const (
@@ -42,7 +43,7 @@ type Client struct {
 
 	ac   *att.Client
 	conn ble.Conn
-	
+
 	addr string
 }
 
@@ -67,6 +68,7 @@ func (p *Client) Unlock() {
 	log.Printf("BLE GATT: %s: unlocking", p)
 	p.RWMutex.Unlock()
 }
+
 // Addr returns the address of the client.
 func (p *Client) Address() ble.Addr {
 	log.Printf("BLE GATT: %s: getting address", p)
@@ -349,7 +351,7 @@ func (p *Client) ReadRSSI() int {
 // ExchangeMTU informs the server of the client’s maximum receive MTU size and
 // request the server to respond with its maximum receive MTU size. [Vol 3, Part F, 3.4.2.1]
 func (p *Client) ExchangeMTU(mtu int) (int, error) {
-	log.Printf("BLE GATT: %s: exchange mtu %d",p, mtu)
+	log.Printf("BLE GATT: %s: exchange mtu %d", p, mtu)
 	p.Lock()
 	defer p.Unlock()
 	out, err := p.ac.ExchangeMTU(mtu)
@@ -363,7 +365,7 @@ func (p *Client) ExchangeMTU(mtu int) (int, error) {
 // Subscribe subscribes to indication (if ind is set true), or notification of a
 // characteristic value. [Vol 3, Part G, 4.10 & 4.11]
 func (p *Client) Subscribe(c *ble.Characteristic, ind bool, h ble.NotificationHandler) error {
-	log.Printf("BLE GATT: %s: subscribing to characteristic",p, c.UUID)
+	log.Printf("BLE GATT: %s: subscribing to characteristic", p, c.UUID)
 	p.Lock()
 	defer p.Unlock()
 
@@ -384,7 +386,7 @@ func (p *Client) Subscribe(c *ble.Characteristic, ind bool, h ble.NotificationHa
 // Unsubscribe unsubscribes to indication (if ind is set true), or notification
 // of a specified characteristic value. [Vol 3, Part G, 4.10 & 4.11]
 func (p *Client) Unsubscribe(c *ble.Characteristic, ind bool) error {
-	log.Printf("BLE GATT: %s: unsubscribing to characteristic",p, c.UUID)
+	log.Printf("BLE GATT: %s: unsubscribing to characteristic", p, c.UUID)
 	p.Lock()
 	defer p.Unlock()
 	if c.CCCD == nil {
@@ -482,12 +484,12 @@ func (p *Client) HandleNotification(req []byte) {
 	if fn == nil {
 		return
 	}
-	out := make([]byte,len(req)-3)
+	out := make([]byte, len(req)-3)
 	copy(out, req[3:])
 	fn(out)
 }
 
-func (p *Client) getNotificationHandler(req []byte) (ble.NotificationHandler, bool){
+func (p *Client) getNotificationHandler(req []byte) (ble.NotificationHandler, bool) {
 	p.Lock()
 	defer p.Unlock()
 	vh := att.HandleValueIndication(req).AttributeHandle()

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thomascriley/ble"
+	"github.com/nehmeroumani/ble"
 )
 
 type conn struct {

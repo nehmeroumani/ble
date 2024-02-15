@@ -3,8 +3,9 @@ package gatt
 import (
 	"log"
 	"sync"
-	"github.com/thomascriley/ble"
-	"github.com/thomascriley/ble/linux/att"
+
+	"github.com/nehmeroumani/ble"
+	"github.com/nehmeroumani/ble/linux/att"
 )
 
 // NewServerWithName creates a new Server with the specified name

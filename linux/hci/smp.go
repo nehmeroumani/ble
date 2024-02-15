@@ -3,8 +3,9 @@ package hci
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/thomascriley/ble/linux/hci/evt"
-	"github.com/thomascriley/ble/linux/smp"
+
+	"github.com/nehmeroumani/ble/linux/hci/evt"
+	"github.com/nehmeroumani/ble/linux/smp"
 )
 
 // SMP ...

@@ -7,9 +7,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/thomascriley/ble"
-	"github.com/thomascriley/ble/linux/adv"
-	"github.com/thomascriley/ble/linux/gatt"
+	"github.com/nehmeroumani/ble"
+	"github.com/nehmeroumani/ble/linux/adv"
+	"github.com/nehmeroumani/ble/linux/gatt"
 )
 
 // Addr ...
@@ -136,7 +136,7 @@ func (h *HCI) AdvertiseMfgData(ctx context.Context, id uint16, md []byte) error 
 }
 
 // AdvertiseServiceData16 advertises data associated with a 16bit service uuid
-func (h *HCI) AdvertiseServiceData16(ctx context.Context,id uint16, b []byte) error {
+func (h *HCI) AdvertiseServiceData16(ctx context.Context, id uint16, b []byte) error {
 	ad, err := adv.NewPacket(adv.ServiceData16(id, b))
 	if err != nil {
 		return err
@@ -148,7 +148,7 @@ func (h *HCI) AdvertiseServiceData16(ctx context.Context,id uint16, b []byte) er
 }
 
 // AdvertiseIBeaconData advertise iBeacon with given manufacturer data.
-func (h *HCI) AdvertiseIBeaconData(ctx context.Context,md []byte) error {
+func (h *HCI) AdvertiseIBeaconData(ctx context.Context, md []byte) error {
 	ad, err := adv.NewPacket(adv.IBeaconData(md))
 	if err != nil {
 		return err
@@ -160,7 +160,7 @@ func (h *HCI) AdvertiseIBeaconData(ctx context.Context,md []byte) error {
 }
 
 // AdvertiseIBeacon advertises iBeacon with specified parameters.
-func (h *HCI) AdvertiseIBeacon(ctx context.Context,u ble.UUID, major, minor uint16, pwr int8) error {
+func (h *HCI) AdvertiseIBeacon(ctx context.Context, u ble.UUID, major, minor uint16, pwr int8) error {
 	ad, err := adv.NewPacket(adv.IBeacon(u, major, minor, pwr))
 	if err != nil {
 		return err
@@ -210,7 +210,7 @@ func (h *HCI) Dial(ctx context.Context, a ble.Addr, addressType ble.AddressType)
 
 	select {
 	case <-ctx.Done():
-		cancelCTX, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+		cancelCTX, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		cli, err := h.cancelDial(cancelCTX)
 		switch {
@@ -251,11 +251,11 @@ func (h *HCI) cancelDial(ctx context.Context) (ble.ClientBLE, error) {
 				return nil, errors.New("hardware device closed")
 			}
 			return nil, h.err
-		case ch := <- h.chMasterConn:
+		case ch := <-h.chMasterConn:
 			return gatt.NewClient(ch)
 		}
 	default:
-		return nil, fmt.Errorf( "cancel connection failed: %w", err)
+		return nil, fmt.Errorf("cancel connection failed: %w", err)
 	}
 }
 
@@ -302,9 +302,9 @@ func (h *HCI) cancelConnection(ctx context.Context, connErr error) (ble.Client, 
 			return nil, ctx.Err()
 		case <-h.Closed():
 			return nil, h.err
-		case ch := <- h.chMasterConn:
+		case ch := <-h.chMasterConn:
 			return gatt.NewClient(ch)
 		}
 	}
-	return nil, fmt.Errorf( "cancel connection failed: %w", err)
+	return nil, fmt.Errorf("cancel connection failed: %w", err)
 }

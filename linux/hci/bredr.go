@@ -2,16 +2,17 @@ package hci
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"github.com/thomascriley/ble/log"
 	"net"
 	"time"
-	"errors"
 
-	"github.com/thomascriley/ble"
-	"github.com/thomascriley/ble/linux/hci/cmd"
-	"github.com/thomascriley/ble/linux/l2cap"
-	"github.com/thomascriley/ble/linux/rfcomm"
+	"github.com/nehmeroumani/ble/log"
+
+	"github.com/nehmeroumani/ble"
+	"github.com/nehmeroumani/ble/linux/hci/cmd"
+	"github.com/nehmeroumani/ble/linux/l2cap"
+	"github.com/nehmeroumani/ble/linux/rfcomm"
 )
 
 type nameEvent struct {
@@ -112,7 +113,7 @@ func (h *HCI) DialRFCOMM(ctx context.Context, a ble.Addr, clockOffset uint16, pa
 	}
 	addr := [6]byte{b[5], b[4], b[3], b[2], b[1], b[0]}
 
-	if err := h.sendBREDRParams(ctx, addr, clockOffset,pageScanRepetitionMode); err != nil {
+	if err := h.sendBREDRParams(ctx, addr, clockOffset, pageScanRepetitionMode); err != nil {
 		return nil, fmt.Errorf("unable to send BREDR params: %w", err)
 	}
 
@@ -209,5 +210,5 @@ func (h *HCI) cancelConnectionBREDR(ctx context.Context, addr [6]byte, connErr e
 			_ = c.Close(ctx)
 		}
 	}
-	return fmt.Errorf( "cancel connection failed: %w", err)
+	return fmt.Errorf("cancel connection failed: %w", err)
 }

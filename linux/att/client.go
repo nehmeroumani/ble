@@ -4,8 +4,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/thomascriley/ble"
 	"sync"
+
+	"github.com/nehmeroumani/ble"
 )
 
 // NotificationHandler handles notification or indication.
@@ -44,7 +45,7 @@ func (c *Client) Connection() ble.Conn {
 	return c.l2c
 }
 
-func (c *Client) take() (*[]byte,error) {
+func (c *Client) take() (*[]byte, error) {
 	select {
 	case txBuf := <-c.chTxBuf:
 		return &txBuf, nil
@@ -55,7 +56,7 @@ func (c *Client) take() (*[]byte,error) {
 
 func (c *Client) release(txBuf *[]byte) {
 	select {
-	case c.chTxBuf <- *txBuf :
+	case c.chTxBuf <- *txBuf:
 	case <-c.l2c.Disconnected():
 	}
 }
@@ -539,7 +540,7 @@ func (c *Client) sendCmd(b []byte) error {
 func (c *Client) sendReq(b []byte) (rsp []byte, err error) {
 	//logger.Debug("client: req: % X", b)
 	if _, err := c.l2c.Write(b); err != nil {
-		return nil, fmt.Errorf( "send ATT request failed: %w", err)
+		return nil, fmt.Errorf("send ATT request failed: %w", err)
 	}
 	for {
 		select {
@@ -555,11 +556,11 @@ func (c *Client) sendReq(b []byte) (rsp []byte, err error) {
 			//logger.Debug("client: req: % X", b)
 			_, err := c.l2c.Write(errRsp)
 			if err != nil {
-				return nil, fmt.Errorf( "unexpected ATT response received: %w", err)
+				return nil, fmt.Errorf("unexpected ATT response received: %w", err)
 			}
 		case err := <-c.chErr:
 			if err != nil {
-				return nil, fmt.Errorf( "ATT request failed: %w", err)
+				return nil, fmt.Errorf("ATT request failed: %w", err)
 			}
 		case <-c.l2c.Disconnected():
 			return nil, errors.New("l2c disconnected")

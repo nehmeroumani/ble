@@ -6,12 +6,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/thomascriley/ble/log"
 	"time"
 
-	"github.com/thomascriley/ble/linux/hci/cmd"
-	"github.com/thomascriley/ble/linux/hci/evt"
-	"github.com/thomascriley/ble/linux/l2cap"
+	"github.com/nehmeroumani/ble/log"
+
+	"github.com/nehmeroumani/ble/linux/hci/cmd"
+	"github.com/nehmeroumani/ble/linux/hci/evt"
+	"github.com/nehmeroumani/ble/linux/l2cap"
 )
 
 // TODO: check channel selects for context

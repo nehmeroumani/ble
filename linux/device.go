@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/thomascriley/ble/log"
 	"io"
 	"sync"
 	"time"
 
-	"github.com/thomascriley/ble"
-	"github.com/thomascriley/ble/linux/att"
-	"github.com/thomascriley/ble/linux/gatt"
-	"github.com/thomascriley/ble/linux/hci"
+	"github.com/nehmeroumani/ble/log"
+
+	"github.com/nehmeroumani/ble"
+	"github.com/nehmeroumani/ble/linux/att"
+	"github.com/nehmeroumani/ble/linux/gatt"
+	"github.com/nehmeroumani/ble/linux/hci"
 )
 
 // Device ...
@@ -24,26 +25,26 @@ type Device struct {
 	allowDup     bool
 	interval     time.Duration
 
-	scanMutex    sync.Mutex
-	scanErr      chan error
-	scanning     bool
+	scanMutex       sync.Mutex
+	scanErr         chan error
+	scanning        bool
 	scanTempStopped chan bool
-	scanRequested bool
+	scanRequested   bool
 
-	inquireMutex    sync.Mutex
-	inquireErr      chan error
-	inquiring       bool
+	inquireMutex       sync.Mutex
+	inquireErr         chan error
+	inquiring          bool
 	inquireTempStopped chan bool
-	inquireRequested bool
+	inquireRequested   bool
 }
 
 // NewDevice returns the default HCI device.
 func NewDevice() *Device {
 	d := &Device{
-		HCI:        hci.NewHCI(),
-		scanErr:    make(chan error, 1),
-		inquireErr: make(chan error, 1),
-		scanTempStopped: make(chan bool),
+		HCI:                hci.NewHCI(),
+		scanErr:            make(chan error, 1),
+		inquireErr:         make(chan error, 1),
+		scanTempStopped:    make(chan bool),
 		inquireTempStopped: make(chan bool),
 	}
 	close(d.scanTempStopped)
@@ -237,7 +238,7 @@ func (d *Device) Scan(ctx context.Context, allowDup bool, h ble.AdvHandler) erro
 	}
 
 	d.scanRequested = true
-	defer func(){ d.scanRequested = false }()
+	defer func() { d.scanRequested = false }()
 
 	if err := d.HCI.SetAdvHandler(h); err != nil {
 		return fmt.Errorf("unable to set advertisement handler: %s", err)
@@ -268,7 +269,7 @@ func (d *Device) Inquire(ctx context.Context, interval time.Duration, numRespons
 	}
 
 	d.inquireRequested = true
-	defer func(){ d.inquireRequested = false }()
+	defer func() { d.inquireRequested = false }()
 
 	d.numResponses = numResponses
 

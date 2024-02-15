@@ -3,7 +3,7 @@ package hci
 import (
 	"sync"
 
-	"github.com/thomascriley/ble/linux/hci/cmd"
+	"github.com/nehmeroumani/ble/linux/hci/cmd"
 )
 
 type params struct {

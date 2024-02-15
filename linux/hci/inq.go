@@ -3,7 +3,7 @@ package hci
 import (
 	"net"
 
-	"github.com/thomascriley/ble"
+	"github.com/nehmeroumani/ble"
 )
 
 // InquiryEvent interface that wraps methods common to all inquiry events

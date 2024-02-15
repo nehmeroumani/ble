@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/thomascriley/ble/log"
 	"io"
 	"sync"
 	"time"
 
-	"github.com/thomascriley/ble"
-	"github.com/thomascriley/ble/linux/multiplexer"
+	"github.com/nehmeroumani/ble/log"
+
+	"github.com/nehmeroumani/ble"
+	"github.com/nehmeroumani/ble/linux/multiplexer"
 )
 
 var (
@@ -67,7 +68,7 @@ func (c *Client) DialContext(ctx context.Context) (err error) {
 	success, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go func(timeout context.Context, success context.Context){
+	go func(timeout context.Context, success context.Context) {
 		defer group.Done()
 		select {
 		case <-timeout.Done():
@@ -78,7 +79,7 @@ func (c *Client) DialContext(ctx context.Context) (err error) {
 	}(ctx, success)
 
 	c.Add(1)
-	go func(){
+	go func() {
 		defer c.Done()
 		c.loop()
 	}()
@@ -224,7 +225,7 @@ func (c *Client) Write(v []byte) (int, error) {
 		log.Printf("Credits: %d", c.credits)
 	}
 
-	return len(v), c.sendFrame( &frame{
+	return len(v), c.sendFrame(&frame{
 		ControlNumber:      ControlNumberUIH,
 		CommmandResponse:   0x01,
 		Direction:          0x00,
@@ -491,7 +492,7 @@ func (c *Client) sendMultiplexerFrame(m multiplexer.Multiplexer) error {
 		return err
 	}
 	if _, ok := m.(*multiplexer.Test); ok {
-		return c.sendUIHFrame( 0x00, c.serverChannel, 0x01, b)
+		return c.sendUIHFrame(0x00, c.serverChannel, 0x01, b)
 	}
 	return c.sendUIHFrame(0x00, 0x00, 0x00, b)
 }
@@ -598,13 +599,13 @@ func (c *Client) getFrame() (*frame, error) {
 			switch frm.ControlNumber {
 			case ControlNumberDISC:
 				serverChannelNumbers.Remove(c.serverChannel)
-				ctx, cancel := context.WithTimeout(context.Background(), 200 * time.Millisecond)
+				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 				_ = c.l2c.Close(ctx)
 				cancel()
 				return nil, errors.New("received disconnect")
 			case ControlNumberDM:
 				serverChannelNumbers.Remove(c.serverChannel)
-				ctx, cancel := context.WithTimeout(context.Background(), 200 * time.Millisecond)
+				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 				_ = c.l2c.Close(ctx)
 				cancel()
 				return nil, errors.New("received disconnect mode")
